@@ -188,6 +188,3 @@ class SteamCommunityProfile:
     if name == "" or name.firstChild is None:
       return
     self.name = name.firstChild.nodeValue
-
-  #profile = SteamCommunityProfile.input_to_profile('76561197981373609')
-  #print str(profile).encode('ascii', 'replace')

@@ -23,13 +23,19 @@ def db_init(db):
 
 
 def get_memory(db, word):
-
-    row = db.execute("select data from mem where word=lower(?)",
-                     [word]).fetchone()
-    if row:
-        return row[0]
+    rows = db.execute("select data from mem where word=lower(?)", [word]).fetchone()
+    print rows
+    if rows:
+        return rows[0]
     else:
         return None
+        
+def set_memory(db, word, data, nick):
+    db.execute("replace into mem(word, data, nick) values"
+               " (lower(?),?,?)", (word, data, nick))
+    db.commit()
+    return True
+
 
 
 def multiwordReplace(text, wordDic):
@@ -54,34 +60,31 @@ def remember(inp, nick='', db=None, say=None, input=None, notice=None):
     append = False
 
     try:
-        head, tail = inp.split(None, 1)
+        word, data = inp.split(None, 1)
     except ValueError:
-        return remember.__doc__
+        notice(remember.__doc__)
+        return
 
-    data = get_memory(db, head)
+    old_data = get_memory(db, word)
 
-    if tail[0] == '+':
+    if data[0] == '+' and old_data:
         append = True
         # ignore + symbol
-        new = tail[1:]
-        _head, _tail = data.split(None, 1)
-        # data is stored with the input so ignore it when re-adding it
+        new = data[1:]
         import string
-        if len(tail) > 1 and tail[1] in (string.punctuation + ' '):
-            tail = _tail + new
+        if len(data) > 1 and data[1] in (string.punctuation + ' '):
+            data = old_data + new
         else:
-            tail = _tail + ' ' + new
+            data = old_data + ' ' + new
+            
+    set_memory(db, word, data, nick)
 
-    db.execute("replace into mem(word, data, nick) values"
-               " (lower(?),?,?)", (head, tail, nick))
-    db.commit()
-
-    if data:
+    if old_data:
         if append:
-            notice("Appending %s to %s" % (new, data.replace('"', "''")))
+            notice('Appending "%s" to "%s".' % (new, old_data))
         else:
             notice('Forgetting existing data (%s), remembering this instead!'
-                    % data.replace('"', "''"))
+                    % old_data)
             return
     else:
         notice('Remembered!')
@@ -107,7 +110,6 @@ def forget(inp, db=None, input=None, notice=None):
         return
 
 
-@hook.command("info")
 @hook.regex(r'^\? ?(.+)')
 def factoid(inp, say=None, db=None, bot=None):
     "?<word> -- Shows what data is associated with <word>."
@@ -115,13 +117,15 @@ def factoid(inp, say=None, db=None, bot=None):
         prefix_on = bot.config["plugins"]["factoids"]["prefix"]
     except KeyError:
         prefix_on = False
+        
+    requested_factoid = inp.group(1).strip()
 
     db_init(db)
 
-    data = get_memory(db, inp.group(1).strip())
+    data = get_memory(db, requested_factoid)
     if data:
         out = multiwordReplace(data, shortcodes)
         if prefix_on:
-            say("\x02[%s]:\x02 %s" % (inp.group(1).strip(), out))
+            say("\x02[%s]:\x02 %s" % (requested_factoid, out))
         else:
             say(out)
